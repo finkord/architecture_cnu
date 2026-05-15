@@ -1,0 +1,24 @@
+@startuml
+autonumber
+skinparam Style strictuml
+
+actor User
+participant "Payment Controller" as PC
+participant "History Manager" as HM
+database "Payment DB" as DB
+
+User -> PC : GET /payments/history
+PC -> HM : getHistoryByUserId(userId)
+activate HM
+
+HM -> DB : SELECT * FROM payments WHERE user_id = ?
+activate DB
+DB --> HM : List<PaymentRecords>
+deactivate DB
+
+HM --> PC : formattedHistoryData
+deactivate HM
+
+PC --> User : 200 OK (Payment History)
+note left: FR-5.3: Track transactions 
+@enduml

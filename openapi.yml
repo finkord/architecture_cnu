@@ -1,0 +1,86 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  version: 1.0.0
+  description: Sync API for course payments and history management.
+paths:
+  /payments:
+    post:
+      summary: Initiate a course payment
+      description: Process a new payment for a specific course.
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Invalid payment data.
+        '500':
+          description: Payment processing timeout or gateway error.
+
+  /payments/history:
+    get:
+      summary: Get user payment history
+      description: Retrieve a list of all transactions for the authenticated user.
+      operationId: getPaymentHistory
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentResponse'
+
+components:
+  schemas:
+    PaymentRequest:
+      type: object
+      required:
+        - courseId
+        - amount
+        - currency
+        - paymentMethodId
+      properties:
+        courseId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: USD
+        paymentMethodId:
+          type: string
+          description: Reference to a saved payment method.
+
+    PaymentResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, SUCCESS, FAILED]
+        amount:
+          type: number
+        currency:
+          type: string
+        maskedCard:
+          type: string
+          description: Masked sensitive data for security
+        createdAt:
+          type: string
+          format: date-time

@@ -1,0 +1,44 @@
+asyncapi: 2.6.0
+info:
+  title: Payment Service Events
+  version: 1.0.0
+  description: Async API for payment status notifications.
+
+channels:
+  payment/events:
+    publish:
+      summary: Emit payment status changes
+      message:
+        $ref: '#/components/messages/PaymentProcessedEvent'
+
+components:
+  messages:
+    PaymentProcessedEvent:
+      name: PaymentProcessed
+      title: Payment Processed Event
+      summary: Notification sent when a payment status is finalized.
+      payload:
+        type: object
+        properties:
+          transactionId:
+            type: string
+            format: uuid
+          userId:
+            type: string
+            format: uuid
+          courseId:
+            type: string
+            format: uuid
+          status:
+            type: string
+            enum: [SUCCESS, FAILED]
+          timestamp:
+            type: string
+            format: date-time
+      examples:
+        - payload:
+            transactionId: "550e8400-e29b-41d4-a716-446655440000"
+            userId: "user-123"
+            courseId: "course-456"
+            status: "SUCCESS"
+            timestamp: "2026-05-15T19:30:00Z"

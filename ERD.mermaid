@@ -1,0 +1,45 @@
+erDiagram
+    PAYMENT {
+        uuid id PK
+        uuid user_id FK "Reference to User MS"
+        uuid course_id FK "Reference to Course MS"
+        decimal amount
+        string currency
+        string status "Pending, Success, Failed, Refunded"
+        string provider_transaction_id "External ID from Stripe/PayPal"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PAYMENT_METHOD {
+        uuid id PK
+        uuid user_id FK
+        string provider "Stripe, PayPal"
+        string last_four_digits "NFR-S4: Masked data"
+        string provider_token "Secure reference"
+        boolean is_default
+        timestamp created_at
+    }
+
+    PAYMENT_HISTORY {
+        uuid id PK
+        uuid payment_id FK
+        string status_from
+        string status_to
+        string reason
+        timestamp changed_at
+    }
+
+    REFUND {
+        uuid id PK
+        uuid payment_id FK
+        decimal amount
+        string reason
+        string status
+        timestamp processed_at
+    }
+
+    PAYMENT ||--o| PAYMENT_HISTORY : "tracks"
+    PAYMENT ||--o| REFUND : "can have"
+    USER_PAYMENT_PROFILE ||--o{ PAYMENT_METHOD : "manages"
+    PAYMENT_METHOD ||--o{ PAYMENT : "used in"
