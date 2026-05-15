@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Payment Microservice"
@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     # For actual PostgreSQL: postgresql+asyncpg://user:password@host:port/db
     DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

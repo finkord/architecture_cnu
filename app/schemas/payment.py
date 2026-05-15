@@ -2,6 +2,21 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
+class PaymentMethodCreate(BaseModel):
+    id: str
+    user_id: str
+    provider: str
+    card_number: str
+
+class PaymentMethodResponse(BaseModel):
+    id: str
+    user_id: str
+    provider: str
+    masked_card_number: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class PaymentCreate(BaseModel):
     user_id: str
     course_id: str

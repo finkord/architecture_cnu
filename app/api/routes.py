@@ -4,11 +4,32 @@ from sqlalchemy.future import select
 from typing import List
 
 from app.db.session import get_db
-from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentHistoryResponse
+from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentHistoryResponse, PaymentMethodCreate, PaymentMethodResponse
 from app.services.orchestrator import PaymentOrchestrator
-from app.models.payment import PaymentHistory
+from app.models.payment import PaymentHistory, PaymentMethod
+from app.core.security import mask_card_number
 
 router = APIRouter()
+
+@router.post("/methods", response_model=PaymentMethodResponse, status_code=201)
+async def create_payment_method(
+    method_data: PaymentMethodCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Endpoint to add a new payment method for a user.
+    """
+    masked_card = mask_card_number(method_data.card_number)
+    db_method = PaymentMethod(
+        id=method_data.id,
+        user_id=method_data.user_id,
+        provider=method_data.provider,
+        masked_card_number=masked_card
+    )
+    db.add(db_method)
+    await db.commit()
+    await db.refresh(db_method)
+    return db_method
 
 @router.post("/", response_model=PaymentResponse, status_code=201)
 async def create_payment(
