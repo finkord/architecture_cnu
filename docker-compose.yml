@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  payment-db:
+    image: postgres:16-alpine
+    container_name: payment-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-payment_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
+      POSTGRES_DB: ${DB_NAME:-payment_service}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - payment-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  payment-redis:
+    image: redis:alpine
+    container_name: payment-redis
+    networks:
+      - payment-network
+    ports:
+      - "6379:6379"
+
+  payment-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://payment_user:secure_password@payment-db:5432/payment_service}
+      - REDIS_URL=${REDIS_URL:-redis://payment-redis:6379/0}
+      - API_TIMEOUT=${API_TIMEOUT:-5}
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      payment-redis:
+        condition: service_started
+    networks:
+      - payment-network
+    volumes:
+      - app-logs:/var/log/app
+
+networks:
+  payment-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  app-logs:
