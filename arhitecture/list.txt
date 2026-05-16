@@ -1,0 +1,8 @@
+project_functional_req.md - Functional Requirements of E-Learning Platform
+project_nonfunctional_req.md - Non-Functional Requirements of E-Learning Platform
+
+c4.dsl - Component Diagram of the Payment Service
+
+ERD.mermaid - Entity Relationship Diagram of the Payment Service
+
+payments_service_behavior_specification.txt - Behavior Specification of the Payment Service

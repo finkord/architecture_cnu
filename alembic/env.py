@@ -19,7 +19,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 from app.db.base import Base
-from app.models.payment import Payment, PaymentMethod, PaymentHistory
+from app.models.payment import Payment, PaymentMethod, PaymentHistory, Refund
 from app.core.config import settings
 
 target_metadata = Base.metadata

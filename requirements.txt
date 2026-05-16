@@ -5,3 +5,7 @@ pydantic-settings
 sqlalchemy
 asyncpg
 alembic
+aio-pika
+pytest
+pytest-asyncio
+httpx

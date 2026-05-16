@@ -1,0 +1,39 @@
+Behaviors of the component: Payment Service
+This document defines the generic business operations (behaviors) exposed and handled by the simplified Payment Microservice.
+1. Synchronous Operations
+These are direct, request-response operations invoked by end-users or internal microservices.
+1.1. Initiate Course Payment
+Description: Processes an online direct payment request from a student for a specific premium course.
+Actor: End User (via API Gateway).
+Behavior: Validates the incoming payload parameters. Intercepts the request using the Idempotency Middleware to inspect the X-Idempotency-Key against the database, preventing duplicate charges. If unique, it provisions a new transaction entry with a PENDING status and invokes the external Payment Gateway (Stripe/PayPal) within the mandatory performance window.
+1.2. Retrieve Payment History
+Description: Fetches an immutable, chronological list of all past financial transactions for the authenticated user.
+Actor: End User (via API Gateway).
+Behavior: Queries the PostgreSQL database for all transaction logs (purchases, refunds) linked to the user's ID. Before serialization, the payload passes through the PII Masking Utility, ensuring that financial tokens and accounts are sanitized, showing only the last four digits.
+1.3. Handle Payment Gateway Webhook
+Description: Recovers and processes asynchronous checkout finalization or transaction failure events dispatched by the third-party provider.
+Actor: External Payment Gateway (Stripe/PayPal).
+Behavior: Validates the cryptographic provider signature for authenticity. Updates the absolute transaction state machine to SUCCESS or FAILED within the data layer and commits an immutable entry to the order history log for tracking.
+1.4. Verify Transaction State Internally
+Description: Provides an isolated, protected internal verification channel for tracking specific transaction records.
+Actor: Internal System (Enrollment Service).
+Behavior: Exposes a protected synchronous endpoint. Performs a rapid direct read from the payment database to return the current exact transaction lifecycle status without executing external network lookups.
+2. Asynchronous Operations
+These are background operations triggered by state changes or committed transactions within the system ecosystem.
+2.1. Emit Successful Payment Event
+Description: Signals the platform ecosystem that a direct course purchase transaction has been successfully authorized and committed.
+Trigger: Database commit transition of a payment status changing to SUCCESS.
+Behavior: Formulates a structured JSON event payload. The Async Message Broker Adapter publishes a PAYMENT_SUCCESSFUL event to the RabbitMQ broker. It implements publisher confirmations to guarantee "at-least-once" delivery , allowing the Enrollment Service to immediately grant content access.
+2.2. Emit Refunded Payment Event
+Description: Notifies downstream platform services when a course charge reversal is finalized by the core domain.
+Trigger: Execution and DB finalization of an authorized refund workflow.
+Behavior: Changes the payment entry state , commits the details to the refund log table , and dispatches a PAYMENT_REFUNDED event to the RabbitMQ message bus. Downstream listeners consume this message to immediately revoke the student's access to the premium content.
+2.3. Emit Failed Payment Event
+Description: Notifies downstream platform services when a direct course purchase transaction fails or is declined by the gateway.
+Trigger: Database commit transition of a payment status changing to FAILED (e.g., due to webhook notification or synchronous gateway decline).
+Behavior: Formulates a structured JSON event payload detailing the failure reason. The Async Message Broker Adapter publishes a PAYMENT_FAILED event to the RabbitMQ broker. This allows other services to notify the user or unlock held resources.
+2.4. Sanitize and Secure Log Streams
+Description: Dynamically scrubs all out-going logging operations and runtime responses to safeguard user confidentiality.
+Trigger: Any internal logging invocation or persistence activity within the Core Domain or Data Layer.
+Behavior: Automatically pipes internal data blocks through the PII Masking Utility. It uses regex patterns to redact sensitive credentials, gateway account references, or full numbers, enforcing systemic privacy boundaries across all transactions.
+

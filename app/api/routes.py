@@ -1,65 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.db.session import get_db
-from app.schemas.payment import PaymentCreate, PaymentResponse, PaymentHistoryResponse, PaymentMethodCreate, PaymentMethodResponse
+from app.schemas.payment import InitiatePaymentRequest, Payment, PaymentHistoryResponse, PaymentMethodResponse
 from app.services.orchestrator import PaymentOrchestrator
-from app.models.payment import PaymentHistory, PaymentMethod
-from app.core.security import mask_card_number
+from app.models.payment import Payment as PaymentModel
+from app.api.middleware.idempotency import verify_idempotency_key
 
 router = APIRouter()
 
-@router.post("/methods", response_model=PaymentMethodResponse, status_code=201)
-async def create_payment_method(
-    method_data: PaymentMethodCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Endpoint to add a new payment method for a user.
-    """
-    masked_card = mask_card_number(method_data.card_number)
-    db_method = PaymentMethod(
-        id=method_data.id,
-        user_id=method_data.user_id,
-        provider=method_data.provider,
-        masked_card_number=masked_card
-    )
-    db.add(db_method)
-    await db.commit()
-    await db.refresh(db_method)
-    return db_method
-
-@router.post("/", response_model=PaymentResponse, status_code=201)
+@router.post("/", response_model=Payment, status_code=201)
 async def create_payment(
-    payment_data: PaymentCreate,
+    payment_data: InitiatePaymentRequest,
+    x_idempotency_key: str = Depends(verify_idempotency_key),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    FR-5.1: Online course payment processing.
-    FR-5.2: Immediate course access grant (via external service call).
-    NFR-5.1: Process payments within 5 seconds.
-    """
     orchestrator = PaymentOrchestrator(db)
-    payment = await orchestrator.process_payment(payment_data)
+    payment = await orchestrator.process_payment(x_idempotency_key, payment_data)
     return payment
 
 @router.get("/history", response_model=List[PaymentHistoryResponse])
 async def get_payment_history(
-    payment_id: str = Query(None, description="Filter history by payment ID"),
+    user_id: str = Query(..., description="The user ID to fetch history for"),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    FR-5.3: Transaction history retrieval.
-    """
-    query = select(PaymentHistory)
-    if payment_id:
-        query = query.filter(PaymentHistory.payment_id == payment_id)
-        
-    query = query.order_by(PaymentHistory.timestamp.desc())
+    query = select(PaymentModel).filter(PaymentModel.user_id == user_id).options(
+        selectinload(PaymentModel.payment_method),
+        selectinload(PaymentModel.history_records),
+        selectinload(PaymentModel.refunds)
+    ).order_by(PaymentModel.created_at.desc())
     
     result = await db.execute(query)
-    history_records = result.scalars().all()
+    payments = result.scalars().all()
     
-    return history_records
+    response = []
+    for p in payments:
+        pm_response = PaymentMethodResponse(
+            id=p.payment_method.id,
+            provider=p.payment_method.provider,
+            maskedCard=p.payment_method.last_four_digits
+        )
+        response.append(PaymentHistoryResponse(
+            payment=p,
+            payment_method=pm_response,
+            history=p.history_records,
+            refunds=p.refunds
+        ))
+    return response
+
+@router.post("/webhook")
+async def handle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Handle mocked Stripe webhook.
+    """
+    payload = await request.json()
+    # Mock signature validation
+    return {"status": "success"}

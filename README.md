@@ -1,94 +1,126 @@
-# Payment Microservice
+# Payment Microservice: Complete Developer Guide
 
-A production-ready Payment Microservice built for an e-learning platform. This service handles online course payment processing, immediate course access grants (via mock external services), and transaction history tracking. It adheres to strict non-functional requirements including atomic transactions and PII masking for sensitive payment data.
-
-## Architecture & Tech Stack
-
-*   **Framework**: FastAPI (Python 3.12-slim)
-*   **Database**: PostgreSQL 16
-*   **Message Broker**: Redis (ready for future async event integrations)
-*   **ORM**: SQLAlchemy 2.0 (Async mode with `asyncpg`)
-*   **Migrations**: Alembic (Async configured)
-*   **Data Validation**: Pydantic V2
-*   **Infrastructure**: Fully dockerized with a multi-stage `Dockerfile` and `docker-compose.yml` for local development.
-
-### Key Architectural Decisions
-
-1.  **Transactional Atomicity (NFR-R1)**: A dedicated `PaymentOrchestrator` ensures that the database state is only committed if both the simulated payment gateway and enrollment service calls succeed. If either fails, the transaction is properly logged as failed without granting access.
-2.  **PII Masking (NFR-S4)**: Sensitive credit card numbers are masked down to their last 4 digits (e.g., `**** **** **** 4444`) before ever reaching the database or application logs.
-3.  **Docker Health Checks**: The FastAPI application container will wait (`depends_on: service_healthy`) until PostgreSQL is fully initialized and accepting connections before starting, avoiding startup race conditions. Migrations (`alembic upgrade head`) are run automatically on container boot.
+This repository contains the production-ready Payment Microservice for the CNU E-Learning Platform. The system is designed following strict event-driven C4 architectural guidelines and provides a highly resilient, UoW-backed payment orchestrator with RabbitMQ event integration.
 
 ---
 
-## Getting Started
+## 🛠️ Tech Stack & Architecture
 
-1.  **Clone the repository** and navigate to the project directory.
-2.  **Set up Environment Variables**:
-    Copy the example environment file to `.env`:
-    ```bash
-    cp .env.example .env
-    ```
-3.  **Start the Infrastructure**:
-    Use Docker Compose to spin up the database, Redis, and the FastAPI application:
-    ```bash
-    docker compose up --build -d
-    ```
-4.  **View the interactive API documentation**:
-    Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) in your browser.
+- **Backend Framework**: FastAPI (Python 3.12)
+- **Database**: PostgreSQL with Async SQLAlchemy 2.0 & Alembic (Migrations)
+- **Message Broker**: RabbitMQ (using `aio-pika`)
+- **Testing**: `pytest`, `pytest-asyncio`, `httpx` (Integration & E2E Testing)
+- **Web UI**: Vanilla HTML/JS/CSS with Premium Glassmorphism Design
+- **Orchestration**: Docker Compose
+
+### Core Patterns Implemented
+- **Unit of Work (UoW)**: Ensures atomic database commits and graceful rollbacks.
+- **Idempotency**: Prevents duplicate charges by validating unique `X-Idempotency-Key` headers per transaction.
+- **PII Masking**: Securely masks financial identifiers (`payment_method_id` masked to last 4 digits) before returning audit histories (NFR-S4).
+- **Asynchronous Event Driven**: Publishes `PAYMENT_SUCCESSFUL` and `PAYMENT_FAILED` events directly to RabbitMQ upon payment orchestration completion.
 
 ---
 
-## API Endpoints & Testing
+## 🚀 1. Running the Microservice Locally
 
-You can test the application using the interactive Swagger UI at `/docs` or by using the following `curl` commands in your terminal.
+The entire stack is containerized using Docker Compose. This includes the FastAPI application, PostgreSQL database, and RabbitMQ broker.
 
-### 1. Add a Payment Method
-
-Before you can make a payment, the user needs a payment method registered in the database.
-
+### Start the Infrastructure
+From the root of the repository, execute:
 ```bash
-curl -X 'POST' \
-  'http://localhost:8000/payments/methods' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "id": "pm_card_visa",
-  "user_id": "usr_12345",
-  "provider": "visa",
-  "card_number": "4111222233334444"
-}'
+docker compose up -d --build
 ```
 
-*(Note: The `card_number` will be automatically masked to `**** **** **** 4444` inside the database.)*
+**What this does:**
+1. Spins up `payment-db` (Postgres) and `payment-mq` (RabbitMQ).
+2. Builds and starts the `payment-app` (FastAPI).
+3. Automatically runs Alembic migrations (`alembic upgrade head`) on startup to ensure the database schema is up-to-date.
 
-### 2. Process a Payment
-
-Process a payment for a course. The orchestrator will verify the payment method, simulate the charge, simulate granting access, and return the completed transaction.
-
+**Check Logs:**
 ```bash
-curl -X 'POST' \
-  'http://localhost:8000/payments/' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "user_id": "usr_12345",
-  "course_id": "crs_98765",
-  "amount": 49.99,
-  "currency": "USD",
-  "payment_method_id": "pm_card_visa"
-}'
+docker compose logs -f payment-app
 ```
 
-*(Take note of the `"id"` returned in the JSON response, you will use it in the next step.)*
+---
 
-### 3. Retrieve Payment History
+## 🎨 2. Using the Web UI
 
-Fetch the state transition history of a specific payment ID (e.g., from `pending` to `completed` or `failed`). 
+A premium, interactive Web UI is provided to manually test and visualize the system. It connects directly to the local backend.
 
-Replace `<REPLACE_WITH_YOUR_PAYMENT_ID>` with the actual UUID returned from the previous step. Do not include angle brackets (`<>`).
+### Start the UI Server
+The UI is composed of static HTML/JS/CSS files located in the `ui/` directory. It is now automatically served by an Nginx container within the Docker Compose stack.
+
+If the UI container is not running, you can start it explicitly:
+```bash
+docker compose up -d payment-ui
+```
+
+**Access the UI:**
+Open your browser and navigate to: **[http://localhost:8080](http://localhost:8080)**
+
+**Features:**
+- **Initiate Payments**: Enter an amount and select a valid card or a "decline" simulation.
+- **View History**: See real-time transaction history retrieved from the API with visually distinct status badges (SUCCESS/FAILED) and PII-masked cards.
+
+---
+
+## 🧪 3. Running Integration Tests
+
+A comprehensive integration test suite ensures architectural compliance with the OpenAPI and AsyncAPI specifications. It validates synchronous HTTP responses and verifies that asynchronous RabbitMQ events are fired properly.
+
+### Setup the Test Environment
+It is highly recommended to run the tests in an isolated Python virtual environment on your host machine.
 
 ```bash
-curl -X 'GET' \
-  'http://localhost:8000/payments/history?payment_id=<REPLACE_WITH_YOUR_PAYMENT_ID>' \
-  -H 'accept: application/json'
+# 1. Create a virtual environment
+python3 -m venv test-env
+
+# 2. Activate it
+source test-env/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+```
+
+### Execute the Test Suite
+Ensure the Docker Compose stack is running (`docker compose up -d`). Then, execute `pytest`:
+
+```bash
+pytest -v tests/
+```
+
+**What is tested?**
+1. `test_successful_payment_flow`: Validates HTTP `201` and listens for `PAYMENT_SUCCESSFUL` in RabbitMQ within 5 seconds.
+2. `test_decline_handling_execution`: Simulates a declined card, validates HTTP `402`, and verifies the `PAYMENT_FAILED` event in RabbitMQ.
+3. `test_idempotency_middleware_constraint`: Validates that submitting two identical requests with the same `X-Idempotency-Key` correctly raises a `400 Bad Request`.
+4. `test_history_and_verification_lookup`: Checks the internal history and verification endpoints.
+5. `test_webhook_reception`: Validates ingestion of mock Stripe webhooks.
+
+---
+
+## 📚 4. API Documentation
+
+FastAPI automatically generates interactive OpenAPI documentation. With the service running, you can explore and test the raw API directly:
+
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Redoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Key Endpoints:
+- `POST /payments/`: Orchestrate a new payment.
+- `GET /payments/history?user_id=...`: Retrieve paginated payment history with masked cards.
+- `GET /internal/payments/{id}/verify`: Internal endpoint to verify transaction status.
+- `POST /payments/webhook`: Webhook listener for external gateway events.
+
+---
+
+## 🔄 5. Database Migrations
+
+If you need to update the database schema (e.g., you changed a model in `app/models/payment.py`), use Alembic inside Docker Compose to generate a new migration script:
+
+```bash
+# Generate a new migration script
+docker compose run --rm -v $(pwd)/alembic/versions:/app/alembic/versions payment-app alembic revision --autogenerate -m "Description of change"
+
+# Apply the migration (or simply restart the app container)
+docker compose exec payment-app alembic upgrade head
 ```

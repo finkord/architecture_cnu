@@ -1,44 +1,122 @@
 asyncapi: 2.6.0
 info:
-  title: Payment Service Events
+  title: Payment Service Async API
   version: 1.0.0
-  description: Async API for payment status notifications.
-
+  description: Asynchronous message broker specifications for the Payment Microservice.
 channels:
-  payment/events:
+  payment.successful:
+    description: Channel for successful payment events
     publish:
-      summary: Emit payment status changes
+      summary: Emit Successful Payment Event
+      operationId: emitSuccessfulPaymentEvent
       message:
-        $ref: '#/components/messages/PaymentProcessedEvent'
+        $ref: '#/components/messages/PaymentSuccessful'
+  payment.refunded:
+    description: Channel for refunded payment events
+    publish:
+      summary: Emit Refunded Payment Event
+      operationId: emitRefundedPaymentEvent
+      message:
+        $ref: '#/components/messages/PaymentRefunded'
+  payment.failed:
+    description: Channel for failed or declined payment events
+    publish:
+      summary: Emit Failed Payment Event
+      operationId: emitFailedPaymentEvent
+      message:
+        $ref: '#/components/messages/PaymentFailed'
 
 components:
   messages:
-    PaymentProcessedEvent:
-      name: PaymentProcessed
-      title: Payment Processed Event
-      summary: Notification sent when a payment status is finalized.
+    PaymentSuccessful:
+      name: PAYMENT_SUCCESSFUL
+      title: Payment Successful Event
+      summary: Signals the platform ecosystem that a direct course purchase transaction has been successfully authorized and committed.
       payload:
         type: object
+        required:
+          - payment_id
+          - user_id
+          - course_id
+          - amount
+          - status
         properties:
-          transactionId:
+          payment_id:
             type: string
             format: uuid
-          userId:
+          user_id:
             type: string
             format: uuid
-          courseId:
+          course_id:
+            type: string
+            format: uuid
+          amount:
+            type: number
+            format: double
+          status:
+            type: string
+            enum: [SUCCESS]
+            description: "The absolute transaction state."
+          timestamp:
+            type: string
+            format: date-time
+    PaymentRefunded:
+      name: PAYMENT_REFUNDED
+      title: Payment Refunded Event
+      summary: Notifies downstream platform services when a course charge reversal is finalized by the core domain.
+      payload:
+        type: object
+        required:
+          - refund_id
+          - payment_id
+          - user_id
+          - course_id
+        properties:
+          refund_id:
+            type: string
+            format: uuid
+          payment_id:
+            type: string
+            format: uuid
+          user_id:
+            type: string
+            format: uuid
+          course_id:
             type: string
             format: uuid
           status:
             type: string
-            enum: [SUCCESS, FAILED]
+            enum: [SUCCESS, REFUNDED]
           timestamp:
             type: string
             format: date-time
-      examples:
-        - payload:
-            transactionId: "550e8400-e29b-41d4-a716-446655440000"
-            userId: "user-123"
-            courseId: "course-456"
-            status: "SUCCESS"
-            timestamp: "2026-05-15T19:30:00Z"
+    PaymentFailed:
+      name: PAYMENT_FAILED
+      title: Payment Failed Event
+      summary: Notifies downstream platform services when a course charge fails or is declined.
+      payload:
+        type: object
+        required:
+          - payment_id
+          - user_id
+          - course_id
+          - reason
+        properties:
+          payment_id:
+            type: string
+            format: uuid
+          user_id:
+            type: string
+            format: uuid
+          course_id:
+            type: string
+            format: uuid
+          reason:
+            type: string
+            description: "Reason for the payment failure or decline"
+          status:
+            type: string
+            enum: [FAILED]
+          timestamp:
+            type: string
+            format: date-time

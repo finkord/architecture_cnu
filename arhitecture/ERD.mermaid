@@ -5,7 +5,8 @@ erDiagram
         uuid course_id FK "Reference to Course MS"
         decimal amount
         string currency
-        string status "Pending, Success, Failed, Refunded"
+        string status "PENDING, SUCCESS, FAILED, REFUNDED"
+        uuid payment_method_id FK
         string provider_transaction_id "External ID from Stripe/PayPal"
         timestamp created_at
         timestamp updated_at
@@ -26,7 +27,7 @@ erDiagram
         uuid payment_id FK
         string status_from
         string status_to
-        string reason
+        string reason "Audit trail for atomicity (NFR-R1)"
         timestamp changed_at
     }
 
@@ -35,11 +36,10 @@ erDiagram
         uuid payment_id FK
         decimal amount
         string reason
-        string status
+        string status "PENDING, SUCCESS, FAILED"
         timestamp processed_at
     }
 
     PAYMENT ||--o| PAYMENT_HISTORY : "tracks"
     PAYMENT ||--o| REFUND : "can have"
-    USER_PAYMENT_PROFILE ||--o{ PAYMENT_METHOD : "manages"
     PAYMENT_METHOD ||--o{ PAYMENT : "used in"

@@ -2,85 +2,277 @@ openapi: 3.0.3
 info:
   title: Payment Service API
   version: 1.0.0
-  description: Sync API for course payments and history management.
+  description: Synchronous API for the Payment Microservice, handling payment initiation, history, webhooks, and internal verifications.
+tags:
+  - name: Public API Component
+    description: Exposes REST endpoints for payment initialization, refund requests, webhooks, and history.
+  - name: Internal API Component
+    description: Exposes protected synchronous endpoints for cross-service transaction lookups.
 paths:
   /payments:
     post:
-      summary: Initiate a course payment
-      description: Process a new payment for a specific course.
-      operationId: createPayment
+      summary: Initiate Course Payment
+      description: Processes an online direct payment request from a student for a specific premium course. Validates payload and intercepts with Idempotency Middleware.
+      operationId: initiateCoursePayment
+      tags:
+        - Public API Component
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Mandatory header for state-changing POST requests to prevent duplicate charges.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PaymentRequest'
+              $ref: '#/components/schemas/InitiatePaymentRequest'
       responses:
         '201':
-          description: Payment processed successfully
+          description: Payment initiated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentResponse'
+                $ref: '#/components/schemas/Payment'
         '400':
-          description: Invalid payment data.
-        '500':
-          description: Payment processing timeout or gateway error.
+          description: Invalid payment data or failed idempotency check.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Payment declined or failed by gateway.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /payments/history:
     get:
-      summary: Get user payment history
-      description: Retrieve a list of all transactions for the authenticated user.
-      operationId: getPaymentHistory
+      summary: Retrieve Payment History
+      description: Fetches an immutable, chronological list of all past financial transactions for the authenticated user. Responses are sanitized by the PII Masking Utility.
+      operationId: retrievePaymentHistory
+      tags:
+        - Public API Component
       responses:
         '200':
-          description: Success
+          description: A list of payment transactions with masked sensitive data.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PaymentResponse'
+                  $ref: '#/components/schemas/PaymentHistoryResponse'
+
+  /payments/webhook:
+    post:
+      summary: Handle Payment Gateway Webhook
+      description: Recovers and processes asynchronous checkout finalization or transaction failure events dispatched by the third-party provider. Validates cryptographic signature.
+      operationId: handlePaymentGatewayWebhook
+      tags:
+        - Public API Component
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The webhook payload from the provider.
+      responses:
+        '200':
+          description: Webhook received and processed successfully.
+
+  /internal/payments/{id}/verify:
+    get:
+      summary: Verify Transaction State Internally
+      description: Provides an isolated, protected internal verification channel for tracking specific transaction records.
+      operationId: verifyTransactionStateInternally
+      tags:
+        - Internal API Component
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The payment ID to verify
+      responses:
+        '200':
+          description: Exact transaction lifecycle status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [PENDING, SUCCESS, FAILED, REFUNDED]
 
 components:
   schemas:
-    PaymentRequest:
+    InitiatePaymentRequest:
       type: object
       required:
-        - courseId
+        - user_id
+        - course_id
         - amount
         - currency
-        - paymentMethodId
+        - payment_method_id
       properties:
-        courseId:
+        user_id:
+          type: string
+          format: uuid
+        course_id:
           type: string
           format: uuid
         amount:
           type: number
-          format: decimal
+          format: double
         currency:
           type: string
-          example: USD
-        paymentMethodId:
-          type: string
-          description: Reference to a saved payment method.
-
-    PaymentResponse:
-      type: object
-      properties:
-        transactionId:
+        payment_method_id:
           type: string
           format: uuid
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          description: "Reference to User MS"
+        course_id:
+          type: string
+          format: uuid
+          description: "Reference to Course MS"
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SUCCESS, FAILED, REFUNDED]
+        payment_method_id:
+          type: string
+          format: uuid
+        provider_transaction_id:
+          type: string
+          description: "External ID from Stripe/PayPal"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          description: "Stripe, PayPal"
+        last_four_digits:
+          type: string
+          description: "NFR-S4: Masked data"
+        provider_token:
+          type: string
+          description: "Secure reference"
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    PaymentHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payment_id:
+          type: string
+          format: uuid
+        status_from:
+          type: string
+        status_to:
+          type: string
+        reason:
+          type: string
+          description: "Audit trail for atomicity (NFR-R1)"
+        changed_at:
+          type: string
+          format: date-time
+
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payment_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        reason:
+          type: string
         status:
           type: string
           enum: [PENDING, SUCCESS, FAILED]
-        amount:
-          type: number
-        currency:
-          type: string
-        maskedCard:
-          type: string
-          description: Masked sensitive data for security
-        createdAt:
+        processed_at:
           type: string
           format: date-time
+
+    PaymentHistoryResponse:
+      type: object
+      description: "Aggregated response for payment history, including masked payment method details to comply with NFR-S4."
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        payment_method:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            provider:
+              type: string
+            maskedCard:
+              type: string
+              description: "Masked card number showing only last 4 digits, mapped from last_four_digits to explicitly comply with NFR-S4"
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentHistory'
+        refunds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: string

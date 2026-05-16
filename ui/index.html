@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+    
+    <div class="app-container">
+        <header>
+            <div class="logo">CNU <span>Pay</span></div>
+            <div class="user-profile">
+                <div class="avatar">U</div>
+                <span id="current-user-id">user_123</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="glass-card payment-section">
+                <h2>New Payment</h2>
+                <form id="payment-form">
+                    <div class="input-group">
+                        <label for="course-id">Course ID</label>
+                        <input type="text" id="course-id" value="course_masterclass" required>
+                    </div>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="amount">Amount</label>
+                            <input type="number" id="amount" value="99.99" step="0.01" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="currency">Currency</label>
+                            <select id="currency">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="UAH">UAH</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="payment-method">Payment Method</label>
+                        <select id="payment-method">
+                            <option value="pm_valid_card">Valid Card (Success)</option>
+                            <option value="decline">Insufficient Funds (Decline)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="primary-btn" id="pay-btn">
+                        <span class="btn-text">Pay Now</span>
+                        <span class="loader hidden"></span>
+                    </button>
+                </form>
+                <div id="payment-alert" class="alert hidden"></div>
+            </section>
+
+            <section class="glass-card history-section">
+                <div class="history-header">
+                    <h2>Transaction History</h2>
+                    <button id="refresh-btn" class="icon-btn" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Course</th>
+                                <th>Amount</th>
+                                <th>Card</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body">
+                            <!-- Rows dynamically populated -->
+                        </tbody>
+                    </table>
+                    <div id="empty-history" class="empty-state">No transactions found</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
